@@ -1,9 +1,8 @@
 import pickle
 import os
 import collections
-
-import nibabel as nib
 import numpy as np
+import nibabel as nib
 from nilearn.image import reorder_img, new_img_like
 
 from .nilearn_custom_utils.nilearn_utils import crop_img_to
@@ -20,28 +19,23 @@ def pickle_load(in_file):
         return pickle.load(opened_file)
 
 
+def get_image(data, affine, nib_class=nib.Nifti1Image):
+    return nib_class(dataobj=data, affine=affine)
+
+
 def get_affine(in_file):
     return read_image(in_file).affine
 
 
 def read_image_files(image_files, image_shape=None, crop=None, label_indices=None):
-    """
-    
-    :param image_files: 
-    :param image_shape: 
-    :param crop: 
-    :param use_nearest_for_last_file: If True, will use nearest neighbor interpolation for the last file. This is used
-    because the last file may be the labels file. Using linear interpolation here would mess up the labels.
-    :return: 
-    """
     if label_indices is None:
         label_indices = []
     elif not isinstance(label_indices, collections.Iterable) or isinstance(label_indices, str):
         label_indices = [label_indices]
+
     image_list = list()
     for index, image_file in enumerate(image_files):
-        if (label_indices is None and (index + 1) == len(image_files)) \
-                or (label_indices is not None and index in label_indices):
+        if index in label_indices:
             interpolation = "nearest"
         else:
             interpolation = "linear"

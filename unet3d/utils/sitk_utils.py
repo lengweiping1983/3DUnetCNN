@@ -1,9 +1,9 @@
-import SimpleITK as sitk
 import numpy as np
+import SimpleITK as sitk
 
 
 def calculate_origin_offset(new_spacing, old_spacing):
-    return np.subtract(new_spacing, old_spacing)/2
+    return np.subtract(new_spacing, old_spacing) / 2
 
 
 def sitk_resample_to_spacing(image, new_spacing=(1.0, 1.0, 1.0), interpolator=sitk.sitkLinear, default_value=0.):

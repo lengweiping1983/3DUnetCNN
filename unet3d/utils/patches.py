@@ -7,7 +7,7 @@ def compute_patch_indices(image_shape, patch_size, overlap, start=None):
     if start is None:
         n_patches = np.ceil(image_shape / (patch_size - overlap))
         overflow = (patch_size - overlap) * n_patches - image_shape + overlap
-        start = -np.ceil(overflow/2)
+        start = -np.ceil(overflow / 2)
     elif isinstance(start, int):
         start = np.asarray([start] * len(image_shape))
     stop = image_shape + start
@@ -82,8 +82,8 @@ def reconstruct_from_patches(patches, patch_indices, data_shape, default_value=0
     be overwritten.
     :return: numpy array containing the data reconstructed by the patches.
     """
-    data = np.ones(data_shape) * default_value
     image_shape = data_shape[-3:]
+    data = np.ones(data_shape) * default_value
     count = np.zeros(data_shape, dtype=np.int)
     for patch, index in zip(patches, patch_indices):
         image_patch_shape = patch.shape[-3:]
@@ -108,6 +108,8 @@ def reconstruct_from_patches(patches, patch_indices, data_shape, default_value=0
 
         averaged_data_index = np.logical_and(patch_index, count > 0)
         if np.any(averaged_data_index):
-            data[averaged_data_index] = (data[averaged_data_index] * count[averaged_data_index] + patch_data[averaged_data_index]) / (count[averaged_data_index] + 1)
+            data[averaged_data_index] = (data[averaged_data_index] * count[averaged_data_index]
+                                         + patch_data[averaged_data_index]) / \
+                                        (count[averaged_data_index] + 1)
         count[patch_index] += 1
     return data

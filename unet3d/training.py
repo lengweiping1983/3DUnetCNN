@@ -5,15 +5,15 @@ from keras import backend as K
 from keras.callbacks import ModelCheckpoint, CSVLogger, LearningRateScheduler, ReduceLROnPlateau, EarlyStopping
 from keras.models import load_model
 
-from unet3d.metrics import (dice_coefficient, dice_coefficient_loss, dice_coef, dice_coef_loss,
-                            weighted_dice_coefficient_loss, weighted_dice_coefficient)
+from .metrics import (dice_coefficient, dice_coefficient_loss, dice_coef, dice_coef_loss,
+                      weighted_dice_coefficient, weighted_dice_coefficient_loss)
 
 K.set_image_dim_ordering('th')
 
 
 # learning rate schedule
 def step_decay(epoch, initial_lrate, drop, epochs_drop):
-    return initial_lrate * math.pow(drop, math.floor((1+epoch)/float(epochs_drop)))
+    return initial_lrate * math.pow(drop, math.floor((1 + epoch) / float(epochs_drop)))
 
 
 def get_callbacks(model_file, initial_learning_rate=0.0001, learning_rate_drop=0.5, learning_rate_epochs=None,
@@ -35,8 +35,10 @@ def get_callbacks(model_file, initial_learning_rate=0.0001, learning_rate_drop=0
 
 def load_old_model(model_file):
     print("Loading pre-trained model")
-    custom_objects = {'dice_coefficient_loss': dice_coefficient_loss, 'dice_coefficient': dice_coefficient,
-                      'dice_coef': dice_coef, 'dice_coef_loss': dice_coef_loss,
+    custom_objects = {'dice_coefficient': dice_coefficient,
+                      'dice_coefficient_loss': dice_coefficient_loss,
+                      'dice_coef': dice_coef,
+                      'dice_coef_loss': dice_coef_loss,
                       'weighted_dice_coefficient': weighted_dice_coefficient,
                       'weighted_dice_coefficient_loss': weighted_dice_coefficient_loss}
     try:
@@ -80,6 +82,7 @@ def train_model(model, model_file, training_generator, validation_generator, ste
                         epochs=n_epochs,
                         validation_data=validation_generator,
                         validation_steps=validation_steps,
+                        use_multiprocessing=True,
                         callbacks=get_callbacks(model_file,
                                                 initial_learning_rate=initial_learning_rate,
                                                 learning_rate_drop=learning_rate_drop,

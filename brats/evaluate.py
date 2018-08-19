@@ -1,7 +1,7 @@
-import numpy as np
-import nibabel as nib
 import os
 import glob
+import numpy as np
+import nibabel as nib
 import pandas as pd
 import matplotlib
 matplotlib.use('agg')
@@ -20,8 +20,8 @@ def get_enhancing_tumor_mask(data):
     return data == 4
 
 
-def dice_coefficient(truth, prediction):
-    return 2 * np.sum(truth * prediction)/(np.sum(truth) + np.sum(prediction))
+def dice_coefficient(truth, prediction, smooth=0.00001):
+    return 2 * np.sum(truth * prediction + smooth / 2) / (np.sum(truth) + np.sum(prediction) + smooth)
 
 
 def main():
@@ -29,20 +29,25 @@ def main():
     masking_functions = (get_whole_tumor_mask, get_tumor_core_mask, get_enhancing_tumor_mask)
     rows = list()
     subject_ids = list()
-    for case_folder in glob.glob("prediction/*"):
-        if not os.path.isdir(case_folder):
+    input_folder = "data/prediction"
+    for subject_folder in glob.glob(os.path.join(input_folder, "*", "*")):
+        if not os.path.isdir(subject_folder):
             continue
-        subject_ids.append(os.path.basename(case_folder))
-        truth_file = os.path.join(case_folder, "truth.nii.gz")
+        print('find subject', subject_folder)
+        subject_id = os.path.basename(subject_folder)
+        subject_category = os.path.basename(os.path.dirname(subject_folder))
+        subject_ids.append(os.path.join(subject_category, subject_id))
+
+        truth_file = os.path.join(subject_folder, "truth.nii.gz")
         truth_image = nib.load(truth_file)
         truth = truth_image.get_data()
-        prediction_file = os.path.join(case_folder, "prediction.nii.gz")
+        prediction_file = os.path.join(subject_folder, "prediction.nii.gz")
         prediction_image = nib.load(prediction_file)
         prediction = prediction_image.get_data()
         rows.append([dice_coefficient(func(truth), func(prediction))for func in masking_functions])
 
     df = pd.DataFrame.from_records(rows, columns=header, index=subject_ids)
-    df.to_csv("./prediction/brats_scores.csv")
+    df.to_csv("data/prediction/brats_scores.csv")
 
     scores = dict()
     for index, score in enumerate(df.columns):
@@ -51,7 +56,7 @@ def main():
 
     plt.boxplot(list(scores.values()), labels=list(scores.keys()))
     plt.ylabel("Dice Coefficient")
-    plt.savefig("validation_scores_boxplot.png")
+    plt.savefig("data/prediction/validation_scores_boxplot.png")
     plt.close()
 
     if os.path.exists("./training.log"):
@@ -63,7 +68,7 @@ def main():
         plt.xlabel('Epoch')
         plt.xlim((0, len(training_df.index)))
         plt.legend(loc='upper right')
-        plt.savefig('loss_graph.png')
+        plt.savefig('data/prediction/loss_graph.png')
 
 
 if __name__ == "__main__":

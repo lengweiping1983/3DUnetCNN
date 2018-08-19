@@ -1,76 +1,124 @@
 import os
-
 import numpy as np
-import tables
+from nilearn.image import new_img_like
 
-from .normalize import normalize_data_storage, reslice_image_set
-
-
-def create_data_file(out_file, n_channels, n_samples, image_shape):
-    hdf5_file = tables.open_file(out_file, mode='w')
-    filters = tables.Filters(complevel=5, complib='blosc')
-    data_shape = tuple([0, n_channels] + list(image_shape))
-    truth_shape = tuple([0, 1] + list(image_shape))
-    data_storage = hdf5_file.create_earray(hdf5_file.root, 'data', tables.Float32Atom(), shape=data_shape,
-                                           filters=filters, expectedrows=n_samples)
-    truth_storage = hdf5_file.create_earray(hdf5_file.root, 'truth', tables.UInt8Atom(), shape=truth_shape,
-                                            filters=filters, expectedrows=n_samples)
-    affine_storage = hdf5_file.create_earray(hdf5_file.root, 'affine', tables.Float32Atom(), shape=(0, 4, 4),
-                                             filters=filters, expectedrows=n_samples)
-    return hdf5_file, data_storage, truth_storage, affine_storage
+from .utils.utils import resize, read_image_files
+from .utils import crop_img, crop_img_to, read_image
 
 
-def write_image_data_to_file(image_files, data_storage, truth_storage, image_shape, n_channels, affine_storage,
-                             truth_dtype=np.uint8, crop=True):
-    for set_of_files in image_files:
-        images = reslice_image_set(set_of_files, image_shape, label_indices=len(set_of_files) - 1, crop=crop)
+def save_data_npy(npy_path, file_prefix, data=None, truth=None, affine=None):
+
+    output_dir = os.path.dirname(os.path.join(npy_path, file_prefix + '_data.npy'))
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    if data is not None:
+        np.save(os.path.join(npy_path, file_prefix + '_data.npy'),
+                data.astype(np.float32))
+    if truth is not None:
+        np.save(os.path.join(npy_path, file_prefix + '_truth.npy'),
+                truth.astype(np.uint8))
+    if affine is not None:
+        np.save(os.path.join(npy_path, file_prefix + '_affine.npy'),
+                affine.astype(np.float32))
+
+
+def load_data_npy(npy_path, file_prefix, data=False, truth=False, affine=False):
+    if data:
+        data = np.load(os.path.join(npy_path, file_prefix + '_data.npy'))
+    if truth:
+        truth = np.load(os.path.join(npy_path, file_prefix + '_truth.npy'))
+    if affine:
+        affine = np.load(os.path.join(npy_path, file_prefix + '_affine.npy'))
+    return data, truth, affine
+
+
+def write_data_to_file(npy_path, subject_ids, training_data_files, image_shape, normalize=True, crop=True):
+    for index, set_of_files in enumerate(training_data_files):
+        subject_id = subject_ids[index]
+        n_channels = len(set_of_files) - 1
+        images = reslice_image_set(set_of_files, image_shape, label_indices=n_channels, crop=crop)
         subject_data = [image.get_data() for image in images]
-        add_data_to_storage(data_storage, truth_storage, affine_storage, subject_data, images[0].affine, n_channels,
-                            truth_dtype)
-    return data_storage, truth_storage
+        save_data_npy(npy_path, subject_id,
+                      np.asarray(subject_data[:n_channels]),
+                      np.asarray(subject_data[n_channels], dtype=np.uint8),
+                      np.asarray(images[0].affine))
 
-
-def add_data_to_storage(data_storage, truth_storage, affine_storage, subject_data, affine, n_channels, truth_dtype):
-    data_storage.append(np.asarray(subject_data[:n_channels])[np.newaxis])
-    truth_storage.append(np.asarray(subject_data[n_channels], dtype=truth_dtype)[np.newaxis][np.newaxis])
-    affine_storage.append(np.asarray(affine)[np.newaxis])
-
-
-def write_data_to_file(training_data_files, out_file, image_shape, truth_dtype=np.uint8, subject_ids=None,
-                       normalize=True, crop=True):
-    """
-    Takes in a set of training images and writes those images to an hdf5 file.
-    :param training_data_files: List of tuples containing the training data files. The modalities should be listed in
-    the same order in each tuple. The last item in each tuple must be the labeled image. 
-    Example: [('sub1-T1.nii.gz', 'sub1-T2.nii.gz', 'sub1-truth.nii.gz'), 
-              ('sub2-T1.nii.gz', 'sub2-T2.nii.gz', 'sub2-truth.nii.gz')]
-    :param out_file: Where the hdf5 file will be written to.
-    :param image_shape: Shape of the images that will be saved to the hdf5 file.
-    :param truth_dtype: Default is 8-bit unsigned integer. 
-    :return: Location of the hdf5 file with the image data written to it. 
-    """
-    n_samples = len(training_data_files)
-    n_channels = len(training_data_files[0]) - 1
-
-    try:
-        hdf5_file, data_storage, truth_storage, affine_storage = create_data_file(out_file,
-                                                                                  n_channels=n_channels,
-                                                                                  n_samples=n_samples,
-                                                                                  image_shape=image_shape)
-    except Exception as e:
-        # If something goes wrong, delete the incomplete data file
-        os.remove(out_file)
-        raise e
-
-    write_image_data_to_file(training_data_files, data_storage, truth_storage, image_shape,
-                             truth_dtype=truth_dtype, n_channels=n_channels, affine_storage=affine_storage, crop=crop)
-    if subject_ids:
-        hdf5_file.create_array(hdf5_file.root, 'subject_ids', obj=subject_ids)
     if normalize:
-        normalize_data_storage(data_storage)
-    hdf5_file.close()
-    return out_file
+        normalize_all_data(npy_path, subject_ids)
 
 
-def open_data_file(filename, readwrite="r"):
-    return tables.open_file(filename, readwrite)
+def normalize_data(data, mean, std):
+    data -= mean[:, np.newaxis, np.newaxis, np.newaxis]
+    data /= std[:, np.newaxis, np.newaxis, np.newaxis]
+    return data
+
+
+def normalize_all_data(npy_path, subject_ids):
+    means = list()
+    stds = list()
+    for subject_id in subject_ids:
+        data, _, _ = load_data_npy(npy_path, subject_id, data=True, truth=False, affine=False)
+        means.append(data.mean(axis=(1, 2, 3)))
+        stds.append(data.std(axis=(1, 2, 3)))
+    mean = np.asarray(means).mean(axis=0)
+    std = np.asarray(stds).mean(axis=0)
+    for subject_id in subject_ids:
+        data, _, _ = load_data_npy(npy_path, subject_id, data=True, truth=False, affine=False)
+        save_data_npy(npy_path, subject_id, normalize_data(data, mean, std))
+
+
+def find_downsized_info(training_data_files, input_shape):
+    foreground = get_complete_foreground(training_data_files)
+    crop_slices = crop_img(foreground, return_slices=True, copy=True)
+    cropped = crop_img_to(foreground, crop_slices, copy=True)
+    final_image = resize(cropped, new_shape=input_shape, interpolation="nearest")
+    return crop_slices, final_image.affine, final_image.header
+
+
+def get_cropping_parameters(in_files):
+    if len(in_files) > 1:
+        foreground = get_complete_foreground(in_files)
+    else:
+        foreground = get_foreground_from_set_of_files(in_files[0], return_image=True)
+    return crop_img(foreground, return_slices=True, copy=True)
+
+
+def reslice_image_set(in_files, image_shape, out_files=None, label_indices=None, crop=False):
+    if crop:
+        crop_slices = get_cropping_parameters([in_files])
+    else:
+        crop_slices = None
+    images = read_image_files(in_files, image_shape=image_shape, crop=crop_slices, label_indices=label_indices)
+    if out_files:
+        for image, out_file in zip(images, out_files):
+            image.to_filename(out_file)
+        return [os.path.abspath(out_file) for out_file in out_files]
+    else:
+        return images
+
+
+def get_complete_foreground(training_data_files):
+    for i, set_of_files in enumerate(training_data_files):
+        subject_foreground = get_foreground_from_set_of_files(set_of_files)
+        if i == 0:
+            foreground = subject_foreground
+        else:
+            foreground[subject_foreground > 0] = 1
+
+    return new_img_like(read_image(training_data_files[0][-1]), foreground)
+
+
+def get_foreground_from_set_of_files(set_of_files, background_value=0, tolerance=0.00001, return_image=False):
+    for i, image_file in enumerate(set_of_files):
+        image = read_image(image_file)
+        is_foreground = np.logical_or(image.get_data() < (background_value - tolerance),
+                                      image.get_data() > (background_value + tolerance))
+        if i == 0:
+            foreground = np.zeros(is_foreground.shape, dtype=np.uint8)
+
+        foreground[is_foreground] = 1
+    if return_image:
+        return new_img_like(image, foreground)
+    else:
+        return foreground
