@@ -33,16 +33,19 @@ def load_data_npy(npy_path, file_prefix, data=False, truth=False, affine=False):
     return data, truth, affine
 
 
-def write_data_to_file(npy_path, subject_ids, training_data_files, image_shape, normalize=True, crop=True):
+def write_data_to_file(npy_path, subject_ids, training_data_files, image_shape,
+                       normalize=True, crop=True, overwrite=False):
     for index, set_of_files in enumerate(training_data_files):
         subject_id = subject_ids[index]
-        n_channels = len(set_of_files) - 1
-        images = reslice_image_set(set_of_files, image_shape, label_indices=n_channels, crop=crop)
-        subject_data = [image.get_data() for image in images]
-        save_data_npy(npy_path, subject_id,
-                      np.asarray(subject_data[:n_channels]),
-                      np.asarray(subject_data[n_channels], dtype=np.uint8),
-                      np.asarray(images[0].affine))
+        subject_output_folder = os.path.dirname(os.path.join(npy_path, subject_id))
+        if not os.path.exists(subject_output_folder) or overwrite:
+            n_channels = len(set_of_files) - 1
+            images = reslice_image_set(set_of_files, image_shape, label_indices=n_channels, crop=crop)
+            subject_data = [image.get_data() for image in images]
+            save_data_npy(npy_path, subject_id,
+                          np.asarray(subject_data[:n_channels]),
+                          np.asarray(subject_data[n_channels], dtype=np.uint8),
+                          np.asarray(images[0].affine))
 
     if normalize:
         normalize_all_data(npy_path, subject_ids)
