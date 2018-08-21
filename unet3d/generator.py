@@ -159,8 +159,20 @@ def add_data(x_list, y_list, npy_path, subject_ids, index,
         data, truth = random_permutation_x_y(data, truth)
 
     if not skip_blank or np.any(truth != 0):
-        x_list.append(data)
+        x_list.append(HU2uint8(data))
         y_list.append(truth)
+
+
+def HU2uint8(image, HU_min=-1200.0, HU_max=600.0, HU_nan=-2000.0):
+    image_new = np.array(image)
+    image_new[np.isnan(image_new)] = HU_nan
+
+    # normalize to [0, 1]
+    image_new = (image_new - HU_min) / (HU_max - HU_min)
+    image_new = np.clip(image_new, 0, 1)
+    image_new = (image_new * 255).astype(np.float32)
+    image_new = (image_new - 128.0) / 128.0
+    return image_new
 
 
 def get_data_from_file(npy_path, subject_ids, index, patch_shape=None):

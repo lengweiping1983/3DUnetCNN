@@ -10,6 +10,8 @@ def compute_patch_indices(image_shape, patch_size, overlap, start=None):
         start = -np.ceil(overflow / 2)
     elif isinstance(start, int):
         start = np.asarray([start] * len(image_shape))
+    patch_size = np.asarray(patch_size)
+    overlap = np.asarray(overlap)
     stop = image_shape + start
     step = patch_size - overlap
     return get_set_of_patch_indices(start, stop, step)
