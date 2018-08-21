@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from nilearn.image import new_img_like
+from multiprocessing import Pool
 
 from .utils.utils import resize, read_image_files
 from .utils import crop_img, crop_img_to, read_image
@@ -34,21 +35,33 @@ def load_data_npy(npy_path, file_prefix, data=False, truth=False, affine=False):
 
 
 def write_data_to_file(npy_path, subject_ids, training_data_files, image_shape,
-                       normalize=True, crop=True, overwrite=False):
+                       normalize=True, crop=True, overwrite=False, process_number=40):
+    print('Parent process %s.' % os.getpid())
+    p = Pool(process_number)
     for index, set_of_files in enumerate(training_data_files):
         subject_id = subject_ids[index]
-        subject_output_folder = os.path.dirname(os.path.join(npy_path, subject_id))
-        if not os.path.exists(subject_output_folder) or overwrite:
-            n_channels = len(set_of_files) - 1
-            images = reslice_image_set(set_of_files, image_shape, label_indices=n_channels, crop=crop)
-            subject_data = [image.get_data() for image in images]
-            if normalize:
-                subject_data = HU2uint8(subject_data)
-            save_data_npy(npy_path, subject_id,
-                          np.asarray(subject_data[:n_channels]),
-                          np.asarray(subject_data[n_channels], dtype=np.uint8),
-                          np.asarray(images[0].affine))
+        p.apply_async(write_data_task, args=(npy_path, subject_id, set_of_files,
+                                             image_shape, normalize, crop, overwrite))
+    print('Waiting for all subprocesses done...')
+    p.close()
+    p.join()
+    print('All subprocesses done.')
 
+
+def write_data_task(npy_path, subject_id, set_of_files, image_shape,
+                       normalize=True, crop=True, overwrite=False):
+    print('Run task %s (%s)...' % (subject_id, os.getpid()))
+    subject_output_folder = os.path.dirname(os.path.join(npy_path, subject_id))
+    if not os.path.exists(subject_output_folder) or overwrite:
+        n_channels = len(set_of_files) - 1
+        images = reslice_image_set(set_of_files, image_shape, label_indices=n_channels, crop=crop)
+        subject_data = [image.get_data() for image in images]
+        if normalize:
+            subject_data[:n_channels] = HU2uint8(subject_data[:n_channels])
+        save_data_npy(npy_path, subject_id,
+                      np.asarray(subject_data[:n_channels]),
+                      np.asarray(subject_data[n_channels], dtype=np.uint8),
+                      np.asarray(images[0].affine))
     # if normalize:
     #     normalize_all_data(npy_path, subject_ids)
 

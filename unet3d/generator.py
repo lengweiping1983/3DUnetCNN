@@ -21,12 +21,15 @@ def get_training_and_validation_generators(npy_path, subject_ids_file,
                                            validation_patch_overlap=0, training_patch_start_offset=None,
                                            skip_blank=True):
     subject_ids = pickle_load(subject_ids_file)
+
     training_list, validation_list = get_training_and_validation_split(len(subject_ids),
                                                                        training_file=training_keys_file,
                                                                        validation_file=validation_keys_file,
                                                                        data_split=data_split,
                                                                        overwrite=overwrite)
-
+    print('training_list', len(training_list))
+    print('validation_list', len(validation_list))
+    print("get training generator")
     training_generator = data_generator(npy_path, subject_ids, training_list,
                                         batch_size=batch_size,
                                         n_labels=n_labels,
@@ -40,6 +43,7 @@ def get_training_and_validation_generators(npy_path, subject_ids_file,
                                         patch_overlap=0,
                                         patch_start_offset=training_patch_start_offset,
                                         skip_blank=skip_blank)
+    print("get validation generator")
     validation_generator = data_generator(npy_path, subject_ids, validation_list,
                                           batch_size=validation_batch_size,
                                           n_labels=n_labels,
@@ -203,16 +207,17 @@ def get_number_of_steps(n_samples, batch_size):
 def get_number_of_patches(npy_path, subject_ids, index_list, image_shape=None, patch_shape=None,
                           patch_overlap=0, patch_start_offset=None,
                           skip_blank=True):
-    if patch_shape:
-        index_list = create_patch_index_list(index_list,
-                                             image_shape, patch_shape,
-                                             patch_overlap, patch_start_offset)
-        count = 0
-        for index in index_list:
-            x_list = list()
-            y_list = list()
-            add_data(x_list, y_list, npy_path, subject_ids, index, patch_shape=patch_shape, skip_blank=skip_blank)
-            count += len(x_list)
-        return count
-    else:
-        return len(index_list)
+    # if patch_shape:
+    #     index_list = create_patch_index_list(index_list,
+    #                                          image_shape, patch_shape,
+    #                                          patch_overlap, patch_start_offset)
+    #     count = 0
+    #     for index in index_list:
+    #         x_list = list()
+    #         y_list = list()
+    #         add_data(x_list, y_list, npy_path, subject_ids, index, patch_shape=patch_shape, skip_blank=skip_blank)
+    #         count += len(x_list)
+    #     return count
+    # else:
+    #     return len(index_list)
+    return len(index_list)
