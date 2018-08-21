@@ -19,6 +19,12 @@ def pickle_load(in_file):
         return pickle.load(opened_file)
 
 
+def check_and_makedirs(output_file):
+    output_dir = os.path.dirname(output_file)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+
 def get_image(data, affine, nib_class=nib.Nifti1Image):
     return nib_class(dataobj=data, affine=affine)
 

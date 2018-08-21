@@ -42,33 +42,47 @@ def write_data_to_file(npy_path, subject_ids, training_data_files, image_shape,
             n_channels = len(set_of_files) - 1
             images = reslice_image_set(set_of_files, image_shape, label_indices=n_channels, crop=crop)
             subject_data = [image.get_data() for image in images]
+            if normalize:
+                subject_data = HU2uint8(subject_data)
             save_data_npy(npy_path, subject_id,
                           np.asarray(subject_data[:n_channels]),
                           np.asarray(subject_data[n_channels], dtype=np.uint8),
                           np.asarray(images[0].affine))
 
-    if normalize:
-        normalize_all_data(npy_path, subject_ids)
+    # if normalize:
+    #     normalize_all_data(npy_path, subject_ids)
 
 
-def normalize_data(data, mean, std):
-    data -= mean[:, np.newaxis, np.newaxis, np.newaxis]
-    data /= std[:, np.newaxis, np.newaxis, np.newaxis]
-    return data
+def HU2uint8(image, HU_min=-1200.0, HU_max=600.0, HU_nan=-2000.0):
+    image_new = np.array(image)
+    image_new[np.isnan(image_new)] = HU_nan
 
+    # normalize to [0, 1]
+    image_new = (image_new - HU_min) / (HU_max - HU_min)
+    image_new = np.clip(image_new, 0, 1)
+    image_new = (image_new * 255).astype(np.float32)
+    image_new = (image_new - 128.0) / 128.0
+    return image_new
 
-def normalize_all_data(npy_path, subject_ids):
-    means = list()
-    stds = list()
-    for subject_id in subject_ids:
-        data, _, _ = load_data_npy(npy_path, subject_id, data=True, truth=False, affine=False)
-        means.append(data.mean(axis=(1, 2, 3)))
-        stds.append(data.std(axis=(1, 2, 3)))
-    mean = np.asarray(means).mean(axis=0)
-    std = np.asarray(stds).mean(axis=0)
-    for subject_id in subject_ids:
-        data, _, _ = load_data_npy(npy_path, subject_id, data=True, truth=False, affine=False)
-        save_data_npy(npy_path, subject_id, normalize_data(data, mean, std))
+#
+# def normalize_data(data, mean, std):
+#     data -= mean[:, np.newaxis, np.newaxis, np.newaxis]
+#     data /= std[:, np.newaxis, np.newaxis, np.newaxis]
+#     return data
+#
+#
+# def normalize_all_data(npy_path, subject_ids):
+#     means = list()
+#     stds = list()
+#     for subject_id in subject_ids:
+#         data, _, _ = load_data_npy(npy_path, subject_id, data=True, truth=False, affine=False)
+#         means.append(data.mean(axis=(1, 2, 3)))
+#         stds.append(data.std(axis=(1, 2, 3)))
+#     mean = np.asarray(means).mean(axis=0)
+#     std = np.asarray(stds).mean(axis=0)
+#     for subject_id in subject_ids:
+#         data, _, _ = load_data_npy(npy_path, subject_id, data=True, truth=False, affine=False)
+#         save_data_npy(npy_path, subject_id, normalize_data(data, mean, std))
 
 
 def find_downsized_info(training_data_files, input_shape):
