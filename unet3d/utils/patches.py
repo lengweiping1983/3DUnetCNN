@@ -1,25 +1,27 @@
 import numpy as np
 
 
-def compute_patch_indices(image_shape, patch_size, overlap, start=None):
+def compute_patch_indices(image_shape, patch_shape, overlap, start=None):
+    image_shape = np.asarray(image_shape)
+    patch_shape = np.asarray(patch_shape)
     if isinstance(overlap, int):
         overlap = np.asarray([overlap] * len(image_shape))
+    else:
+        overlap = np.asarray(overlap, dtype=np.int16)
     if start is None:
-        n_patches = np.ceil(image_shape / (patch_size - overlap))
-        overflow = (patch_size - overlap) * n_patches - image_shape + overlap
-        start = -np.ceil(overflow / 2)
+        n_patches = np.ceil(image_shape / (patch_shape - overlap))
+        overflow = (patch_shape - overlap) * n_patches + overlap - image_shape
+        start = -int(np.ceil(overflow / 2))
     elif isinstance(start, int):
         start = np.asarray([start] * len(image_shape))
-    patch_size = np.asarray(patch_size)
-    overlap = np.asarray(overlap)
     stop = image_shape + start
-    step = patch_size - overlap
+    step = patch_shape - overlap
     return get_set_of_patch_indices(start, stop, step)
 
 
 def get_set_of_patch_indices(start, stop, step):
     return np.asarray(np.mgrid[start[0]:stop[0]:step[0], start[1]:stop[1]:step[1],
-                               start[2]:stop[2]:step[2]].reshape(3, -1).T, dtype=np.int)
+                               start[2]:stop[2]:step[2]].reshape(3, -1).T, dtype=np.int16)
 
 
 def get_random_patch_index(image_shape, patch_shape):
@@ -37,7 +39,7 @@ def get_random_nd_index(index_max):
     return tuple([np.random.choice(index_max[index] + 1) for index in range(len(index_max))])
 
 
-def get_patch_from_3d_data(data, patch_shape, patch_index):
+def get_patch_from_3d_data(data, patch_shape, patch_index, ndim=3):
     """
     Returns a patch from a numpy array.
     :param data: numpy array from which to get the patch.
@@ -47,11 +49,12 @@ def get_patch_from_3d_data(data, patch_shape, patch_index):
     """
     patch_index = np.asarray(patch_index, dtype=np.int16)
     patch_shape = np.asarray(patch_shape)
-    image_shape = data.shape[-3:]
+    image_shape = data.shape[-ndim:]
     if np.any(patch_index < 0) or np.any((patch_index + patch_shape) > image_shape):
-        data, patch_index = fix_out_of_bound_patch_attempt(data, patch_shape, patch_index)
-    return data[..., patch_index[0]:patch_index[0]+patch_shape[0], patch_index[1]:patch_index[1]+patch_shape[1],
-                patch_index[2]:patch_index[2]+patch_shape[2]]
+        data, patch_index = fix_out_of_bound_patch_attempt(data, patch_shape, patch_index, ndim)
+    return data[..., patch_index[0]:patch_index[0]+patch_shape[0],
+                     patch_index[1]:patch_index[1]+patch_shape[1],
+                     patch_index[2]:patch_index[2]+patch_shape[2]]
 
 
 def fix_out_of_bound_patch_attempt(data, patch_shape, patch_index, ndim=3):
